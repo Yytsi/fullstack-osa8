@@ -137,6 +137,10 @@ const typeDefs = `
 `;
 
 const resolvers = {
+  Author: {
+    bookCount: (root) =>
+      books.filter((book) => book.author === root.name).length,
+  },
   Query: {
     bookCount: () => books.length,
     authorCount: () => authors.length,
@@ -167,6 +171,7 @@ const resolvers = {
     },
     editAuthor: (root, args) => {
       const editedAuthor = authors.find((author) => author.name === args.name);
+      console.log("editedAuthor", editedAuthor);
       if (!editedAuthor) {
         return null;
       }
