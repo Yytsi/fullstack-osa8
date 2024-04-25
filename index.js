@@ -168,7 +168,13 @@ const resolvers = {
     allBooks: async (root, args) => {
       let authorPossibly = null;
       if (args.author) {
-        authorPossibly = await Author.findOne({ name: args.author });
+        authorPossibly = await Author.findOne({ name: args.author }).catch(
+          (error) => {
+            throw new GraphQLError(error.message, {
+              extensions: { code: error.code },
+            });
+          }
+        );
         if (!authorPossibly) {
           return [];
         }
@@ -184,7 +190,22 @@ const resolvers = {
   },
   Mutation: {
     addBook: async (root, args) => {
-      // find author first or make it if it doesn't exist
+      if (!args.title || !args.author || !args.published || !args.genres) {
+        throw new GraphQLError("Missing required fields", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+      if (args.title.length < 4) {
+        throw new GraphQLError("Title must be at least 4 characters", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+      if (args.author.length < 4) {
+        throw new GraphQLError("Author name must be at least 4 characters", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+      // find author first or create it if it doesn't exist
       let existingAuthor = await Author.findOne({ name: args.author });
       if (!existingAuthor) {
         existingAuthor = new Author({ name: args.author });
