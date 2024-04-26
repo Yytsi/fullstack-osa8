@@ -2,9 +2,11 @@ const { ApolloServer } = require("@apollo/server");
 const { startStandaloneServer } = require("@apollo/server/standalone");
 const { GraphQLError } = require("graphql");
 const { v4: uuid } = require("uuid");
+const jwt = require("jsonwebtoken");
 
 const Book = require("./models/book");
 const Author = require("./models/author");
+const User = require("./models/user");
 
 const mongoose = require("mongoose");
 mongoose.set("strictQuery", false);
@@ -125,6 +127,7 @@ const typeDefs = `
     authorCount: Int!
     allBooks(author: String, genre: String): [Book!]!
     allAuthors: [Author!]!
+    me: User
   }
 
   type Mutation {
@@ -139,6 +142,25 @@ const typeDefs = `
       name: String!
       setBornTo: Int
     ): Author
+
+    createUser(
+      username: String!
+      favoriteGenre: String!
+    ): User
+    login(
+      username: String!
+      password: String!
+    ): Token
+  }
+
+  type Token {
+    value: String!
+  }
+
+  type User {
+    username: String!
+    favoriteGenre: String!
+    id: ID!
   }
 
   type Author {
@@ -161,6 +183,9 @@ const resolvers = {
   Author: {
     bookCount: async (root) =>
       Book.collection.countDocuments({ author: root._id }),
+  },
+  Token: {
+    value: (root) => root.value,
   },
   Query: {
     bookCount: async () => Book.collection.countDocuments(),
@@ -187,9 +212,10 @@ const resolvers = {
       return books;
     },
     allAuthors: async () => Author.find({}),
+    me: async (root, args, context) => context.currentUser,
   },
   Mutation: {
-    addBook: async (root, args) => {
+    addBook: async (root, args, { currentUser }) => {
       if (!args.title || !args.author || !args.published || !args.genres) {
         throw new GraphQLError("Missing required fields", {
           extensions: { code: "BAD_USER_INPUT" },
@@ -205,6 +231,19 @@ const resolvers = {
           extensions: { code: "BAD_USER_INPUT" },
         });
       }
+      if (args.genres.length < 1) {
+        throw new GraphQLError("At least one genre must be provided", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+
+      // check credentials
+      if (!currentUser) {
+        throw new GraphQLError("Unauthorized", {
+          extensions: { code: "NO_CREDENTIALS" },
+        });
+      }
+
       // find author first or create it if it doesn't exist
       let existingAuthor = await Author.findOne({ name: args.author });
       if (!existingAuthor) {
@@ -238,11 +277,16 @@ const resolvers = {
           });
         });
     },
-    editAuthor: async (root, args) => {
+    editAuthor: async (root, args, { currentUser }) => {
       const editedAuthor = await Author.findOne({ name: args.name });
       if (!editedAuthor) {
         throw new GraphQLError("Author not found", {
           extensions: { code: "NOT_FOUND" },
+        });
+      }
+      if (!currentUser) {
+        throw new GraphQLError("Unauthorized", {
+          extensions: { code: "NO_CREDENTIALS" },
         });
       }
       editedAuthor.born = args.setBornTo;
@@ -252,6 +296,41 @@ const resolvers = {
         });
       });
       return editedAuthor;
+    },
+
+    createUser: async (root, args) => {
+      if (!args.username || !args.favoriteGenre) {
+        throw new GraphQLError("Missing username or favorite genre.", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+      if (args.username.length < 3) {
+        throw new GraphQLError("Username must be at least 3 characters", {
+          extensions: { code: "BAD_USER_INPUT" },
+        });
+      }
+      const user = new User({ ...args });
+      return user.save().catch((error) => {
+        throw new GraphQLError(error.message, {
+          extensions: { code: error.code },
+        });
+      });
+    },
+
+    login: async (root, args) => {
+      const user = await User.findOne({ username: args.username });
+      if (!user || args.password !== "secret") {
+        throw new GraphQLError("Invalid username or password", {
+          extensions: { code: "UNAUTHORIZED" },
+        });
+      }
+
+      const userForToken = {
+        username: user.username,
+        id: user._id,
+      };
+
+      return { value: jwt.sign(userForToken, process.env.JWT_SECRET) };
     },
   },
 };
@@ -263,6 +342,17 @@ const server = new ApolloServer({
 
 startStandaloneServer(server, {
   listen: { port: 4000 },
+  context: async ({ req, res }) => {
+    const auth = req ? req.headers.authorization : null;
+    if (auth && auth.toLowerCase().startsWith("bearer ")) {
+      const decodedToken = jwt.verify(
+        auth.substring(7),
+        process.env.JWT_SECRET
+      );
+      const currentUser = await User.findById(decodedToken.id);
+      return { currentUser };
+    }
+  },
 }).then(({ url }) => {
   console.log(`Server ready at ${url}`);
 });
