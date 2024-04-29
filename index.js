@@ -193,6 +193,7 @@ const resolvers = {
     allBooks: async (root, args) => {
       let authorPossibly = null;
       if (args.author) {
+        console.log("Finding author", args.author);
         authorPossibly = await Author.findOne({ name: args.author }).catch(
           (error) => {
             throw new GraphQLError(error.message, {
@@ -205,13 +206,20 @@ const resolvers = {
         }
       }
 
+      console.log("Finding books", args);
+
       let books = await Book.find({
         ...(args.author ? { author: authorPossibly._id } : {}),
         ...(args.genre ? { genres: { $in: [args.genre] } } : {}),
       }).populate("author");
       return books;
     },
-    allAuthors: async () => Author.find({}),
+    allAuthors: async () => {
+      console.log("Finding authors");
+      const auth = await Author.find({});
+      console.log("Authors", auth);
+      return auth;
+    },
     me: async (root, args, context) => context.currentUser,
   },
   Mutation: {
