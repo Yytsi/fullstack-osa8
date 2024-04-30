@@ -267,8 +267,6 @@ const resolvers = {
         author: existingAuthor._id,
       });
 
-      console.log("Creating book", book);
-
       return await book
         .save()
         .then((savedBook) => {
