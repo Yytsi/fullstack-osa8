@@ -1,23 +1,50 @@
+import { useState } from 'react'
 import { gql, useQuery } from '@apollo/client'
 
-import { ALL_BOOKS } from '../queries'
+import { ALL_BOOKS, GET_BOOKS_WITH_GENRE } from '../queries'
 
 const Books = (props) => {
-  const result = useQuery(ALL_BOOKS)
+  const [genre, setGenre] = useState('all genres')
+
+  const result = useQuery(GET_BOOKS_WITH_GENRE, {
+    variables: genre ? { genre: genre === 'all genres' ? '' : genre } : {},
+  })
+
+  const resultAllBooks = useQuery(ALL_BOOKS)
+
   if (!props.show) {
     return null
   }
 
-  if (result.loading) {
+  if (result.loading || resultAllBooks.loading) {
     return <div>loading...</div>
   }
 
   const books = result.data.allBooks
+  const allBooks = resultAllBooks.data.allBooks
+
+  const allGenres = allBooks
+    .map((book) => [...book.genres])
+    .reduce((a, currentGenres) => {
+      for (let genre of currentGenres) {
+        if (!a.includes(genre)) {
+          a.push(genre)
+        }
+      }
+      return a
+    }, [])
+    .concat(['all genres'])
 
   return (
     <div>
       <h2>books</h2>
-
+      {genre === 'all genres' ? (
+        <p>all genres</p>
+      ) : (
+        <p>
+          in genre <strong>{genre}</strong>
+        </p>
+      )}
       <table>
         <tbody>
           <tr>
@@ -34,6 +61,18 @@ const Books = (props) => {
           ))}
         </tbody>
       </table>
+
+      {allGenres.map((genre) => (
+        <button
+          key={genre + '.'}
+          value={genre}
+          onClick={(e) => {
+            setGenre(e.target.value)
+          }}
+        >
+          {genre}
+        </button>
+      ))}
     </div>
   )
 }
