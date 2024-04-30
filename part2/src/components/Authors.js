@@ -8,6 +8,7 @@ const Authors = (props) => {
   const [editAuthor] = useMutation(EDIT_AUTHOR, {
     refetchQueries: [{ query: ALL_AUTHORS }],
   })
+
   const [born, setBorn] = useState('')
   const [selectedOption, setSelectedOption] = useState(null)
   const [possibleOptions, setPossibleOptions] = useState([])
