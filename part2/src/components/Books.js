@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { gql, useQuery } from '@apollo/client'
+import { useSubscription } from '@apollo/client'
 
-import { ALL_BOOKS, GET_BOOKS_WITH_GENRE } from '../queries'
+import { ALL_BOOKS, GET_BOOKS_WITH_GENRE, BOOK_ADDED } from '../queries'
 
 const Books = (props) => {
   const [genre, setGenre] = useState('all genres')
@@ -11,6 +12,13 @@ const Books = (props) => {
   })
 
   const resultAllBooks = useQuery(ALL_BOOKS)
+
+  useSubscription(BOOK_ADDED, {
+    onData: ({ data }) => {
+      result.refetch()
+      resultAllBooks.refetch()
+    },
+  })
 
   if (!props.show) {
     return null
